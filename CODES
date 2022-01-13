@@ -1,0 +1,103 @@
+#  -*- coding: utf-8 -*-
+from io import open
+from openlocationcode import openlocationcode as olc
+import csv
+
+class EncodeGpsDecode:
+    def __init__(self,rootpath):
+        self.rootpath=rootpath
+
+
+    def readcsvencode(self,csvname):
+        data=[]
+        path=self.rootpath+csvname
+        headermap = {0: 'lat', 1: 'lng', 2: 'length', 3: 'code'}
+        with open(path, mode='r', encoding='utf-8') as fin:
+            for line in fin:
+                if line.startswith('#'):
+                    continue
+                td = line.strip().split(',')
+                for i in range(0, 3):
+                    td[i] = float(td[i])
+        data.append({headermap[i]: v for i, v in enumerate(td)})
+        return data
+
+    def readcsvdecode(self, csvname):
+        data=[]
+        headermap = {
+            0: 'code',
+            1: 'length',
+            2: 'latLo',
+            3: 'lngLo',
+            4: 'latHi',
+            5: 'longHi'
+        }
+        path=self.rootpath+csvname
+        with open(path, mode='r', encoding='utf-8') as fin:
+            for line in fin:
+                if line.startswith('#'):
+                    continue
+                td = line.strip().split(',')
+                for i in range(1, len(headermap)):
+                    td[i] = float(td[i])
+
+        data.append({headermap[i]: v for i, v in enumerate(td)})
+        return data
+
+    def writecode(self,csvname,encodedata):
+        path = self.rootpath + csvname
+        with open(path, mode='a', encoding='utf-8') as fin:
+            writer = csv.writer(path)
+            writer.writerows(encodedata)
+            fin.close()
+
+    #数据格式是[{'lat': 120.0, 'lng': 36.0, 'length': 10.0, 'code': '11111111110'}]
+    #包含经纬度长度，检索code长度
+    def encodeGps(self,data):
+        count=1
+        result={}
+        for listdata in data:
+            indextemp=str(listdata['lat'])+'|'+str(listdata['lng'])+'|'+str(listdata['length'])+'|'+str(count)
+            count = count + 1
+            if (listdata['length']!=0) :
+                print('len:',int(listdata['length']))
+                result[indextemp]=olc.encode(float(listdata['lat']), float(listdata['lng']),int(listdata['length']))
+            else:
+                if '0' in listdata['code']:
+                    length=listdata['code'].index('0')
+                    result[indextemp]=olc.encode(float(listdata['lat']), float(listdata['lng']), length)
+        return result
+
+    def decodeGps(self,encodedata):
+        area={}
+        count=1
+
+        for td in encodedata:
+            tempindex=str(encodedata['code'])+'|'+str(encodedata['length'])+'|'+str(count)
+
+            if olc.isValid(td['code'])==True & olc.isFull(td['code'])==True:
+                decoded = olc.decode(td['code'])
+                area[tempindex] = decoded
+                count = count + 1
+            else:
+                print('不符合格式和完整性检测')
+        return area
+
+
+if __name__ == '__main__':
+
+    #控制编码-0和解码-1
+    Flag=0
+    #实际数据格式
+    rootpath = 'H:/meanshift/mean-shift/GoogleCodePlus/test_data/'
+    codegps = EncodeGpsDecode(rootpath)
+
+    if Flag==0:
+        #encoding.csv格式：30.280557(lat)	120.09519(lng)	12(编码位数)	8Q2273JV+7R6(方式1：采用编码位数，但是保证code不能包含0;方式2：采用code中包含0的索引位数作为编码位数)
+        data = codegps.readcsvencode('encoding.csv')
+        res = codegps.encodeGps(data)
+        print('res:', res)
+    elif Flag==1:
+        data = codegps.readcsvdecode('decoding.csv')
+        area=codegps.decodeGps(data)
+        print('area:',area)
